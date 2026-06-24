@@ -8,6 +8,7 @@ on:
 
 jobs:
   prepare:
+    name: cd / prepare-report-service
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
@@ -17,6 +18,7 @@ jobs:
           echo "CD Pipeline triggered by CI Pipeline head sha: ${{ github.event.workflow_run.head_sha }}"
 
   deploy:
+    name: cd / deploy-report-service
     needs: prepare
     runs-on: ubuntu-latest
     steps:
@@ -59,18 +61,36 @@ jobs:
 
       - name: Commit and Push to GitOps
         run: |
+          set +e
           cd gitops-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add environments/
           if git diff --staged --quiet; then
             echo "No changes to deploy (image tag is already up to date)."
-          else
-            git commit -m "deploy: update report-service image tag to ${{ github.event.workflow_run.head_sha }} [skip ci]"
-            git push origin HEAD
+            exit 0
           fi
+          
+          git commit -m "deploy: update report-service image tag to ${{ github.event.workflow_run.head_sha }} [skip ci]"
+          for i in {1..10}; do
+            echo "Push attempt $i..."
+            git rebase --abort || true
+            git pull origin HEAD --rebase
+            if [ $? -eq 0 ]; then
+              git push origin HEAD
+              if [ $? -eq 0 ]; then
+                echo "Push successful!"
+                exit 0
+              fi
+            fi
+            echo "Push failed. Sleeping and retrying..."
+            sleep $(( RANDOM % 5 + 2 ))
+          done
+          echo "Failed to push changes to GitOps repo after 10 attempts."
+          exit 1
 
   notify:
+    name: cd / notify-report-service
     needs: deploy
     runs-on: ubuntu-latest
     steps:

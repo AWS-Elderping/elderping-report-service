@@ -69,7 +69,18 @@ jobs:
             echo "No changes to deploy (image tag is already up to date)."
           else
             git commit -m "deploy: update report-service image tag to ${{ github.event.workflow_run.head_sha }} [skip ci]"
-            git push origin HEAD
+            for i in {1..10}; do
+              echo "Push attempt $i..."
+              git pull origin HEAD --rebase
+              if git push origin HEAD; then
+                echo "Push successful!"
+                exit 0
+              fi
+              echo "Push failed. Sleeping and retrying..."
+              sleep $(( RANDOM % 5 + 2 ))
+            done
+            echo "Failed to push changes to GitOps repo after 10 attempts."
+            exit 1
           fi
 
   notify:

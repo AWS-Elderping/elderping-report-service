@@ -7,9 +7,18 @@ on:
       - completed
 
 jobs:
-  cd:
+  prepare:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: CD Initialization
+        run: |
+          echo "CD Pipeline triggered by CI Pipeline head branch: ${{ github.event.workflow_run.head_branch }}"
+          echo "CD Pipeline triggered by CI Pipeline head sha: ${{ github.event.workflow_run.head_sha }}"
+
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
@@ -60,4 +69,12 @@ jobs:
             git commit -m "deploy: update report-service image tag to ${{ github.event.workflow_run.head_sha }} [skip ci]"
             git push origin HEAD
           fi
+
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Complete CD Notification
+        run: |
+          echo "CD Pipeline completed successfully: deploy successful"
 

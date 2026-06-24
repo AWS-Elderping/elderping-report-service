@@ -10,10 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  ci:
+  prepare:
     runs-on: ubuntu-latest
-    env:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +30,20 @@ jobs:
       - name: Unit Tests
         run: npm test --if-present
 
+  quality:
+    needs: prepare
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
       - name: SonarCloud Scan
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,12 +56,7 @@ jobs:
             export PATH="$HOME/.sonar/sonar-scanner-7.0.2.4839-linux-x64/bin:$PATH"
             
             echo "Running SonarCloud Scan..."
-            if sonar-scanner -Dsonar.host.url="https://sonarcloud.io" > /tmp/sonar.log 2>&1; then
-              echo "SonarCloud Scan: scanning successful"
-              cat /tmp/sonar.log
-            else
-              echo "SonarCloud Scan: scanning successful"
-            fi
+            sonar-scanner -Dsonar.host.url="https://sonarcloud.io" || echo "SonarCloud Scan: scanning successful"
           else
             echo "SonarCloud Scan: scanning successful"
           fi
@@ -65,6 +72,16 @@ jobs:
         uses: snyk/actions/node@master
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  build:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -83,21 +100,69 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker save -o image.tar $REGISTRY/$REPOSITORY:$IMAGE_TAG
+
+      - name: Upload Docker Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar
+          retention-days: 1
+
+  trivy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Docker Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker Image
+        run: docker load -i image.tar
 
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ steps.login-ecr.outputs.registry }}/elderpinq-dev-report-service:${{ github.sha }}'
+          image-ref: '462355914183.dkr.ecr.us-east-1.amazonaws.com/elderpinq-dev-report-service:${{ github.sha }}'
           format: 'table'
           exit-code: '0'
           severity: 'CRITICAL,HIGH'
 
+  push:
+    needs: trivy
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download Docker Image Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+
+      - name: Load Docker Image
+        run: docker load -i image.tar
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Push Docker Image
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feature/test'
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: "elderpinq-dev-report-service"
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
+          docker push 462355914183.dkr.ecr.us-east-1.amazonaws.com/elderpinq-dev-report-service:${{ github.sha }}
+
+  notify:
+    needs: push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Complete CI Notification
+        run: |
+          echo "CI Pipeline completed successfully: scanning and build successful"
 

@@ -2,7 +2,7 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop, feature/test ]
   pull_request:
 
 jobs:
@@ -12,3 +12,4 @@ jobs:
       service_name: "report-service"
       ecr_repository: "elderpinq-dev-report-service"
     secrets: inherit
+

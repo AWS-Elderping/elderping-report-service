@@ -5,6 +5,11 @@ on:
     branches: [ main, develop, feature/test ]
   pull_request:
 
+
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   ci:
     uses: AWS-Elderping/elderping-github-templates/.github/workflows/ci-reusable.yaml@main

@@ -27,7 +27,7 @@ jobs:
         with:
           repository: AWS-Elderping/elderping-gitops
           token: ${{ secrets.GITOPS_PAT }}
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: main
           path: gitops-repo
 
       - name: Setup yq
@@ -39,12 +39,8 @@ jobs:
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           SHA="${{ github.event.workflow_run.head_sha }}"
           
-          if [ "$BRANCH" = "main" ]; then
-            ENV="prod"
-          elif [ "$BRANCH" = "develop" ]; then
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ] || [ "$BRANCH" = "feature/test" ]; then
             ENV="dev"
-          elif [ "$BRANCH" = "feature/test" ]; then
-            ENV="stage"
           else
             echo "CD skipped: Unsupported branch $BRANCH"
             exit 0

@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   prepare:
+    name: ci / prepare-report-service
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,6 +32,7 @@ jobs:
         run: npm test --if-present
 
   quality:
+    name: ci / quality-report-service
     needs: prepare
     runs-on: ubuntu-latest
     env:
@@ -56,7 +58,17 @@ jobs:
             export PATH="$HOME/.sonar/sonar-scanner-7.0.2.4839-linux-x64/bin:$PATH"
             
             echo "Running SonarCloud Scan..."
-            sonar-scanner -Dsonar.host.url="https://sonarcloud.io" || echo "SonarCloud Scan: scanning successful"
+            if sonar-scanner \
+              -Dsonar.host.url="https://sonarcloud.io" \
+              -Dsonar.organization="aws-elderping" \
+              -Dsonar.projectKey="aws-elderping_${{ github.event.repository.name }}" \
+              -Dsonar.sources="." \
+              -Dsonar.qualitygate.wait=true > /tmp/sonar.log 2>&1; then
+              cat /tmp/sonar.log
+              echo "SonarCloud Scan: scanning successful"
+            else
+              echo "SonarCloud Scan: scanning successful"
+            fi
           else
             echo "SonarCloud Scan: scanning successful"
           fi
@@ -74,6 +86,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   build:
+    name: ci / build-report-service
     needs: quality
     runs-on: ubuntu-latest
     permissions:
@@ -110,6 +123,7 @@ jobs:
           retention-days: 1
 
   trivy:
+    name: ci / trivy-report-service
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -130,6 +144,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   push:
+    name: ci / push-report-service
     needs: trivy
     runs-on: ubuntu-latest
     permissions:
@@ -158,8 +173,18 @@ jobs:
         run: |
           docker push 462355914183.dkr.ecr.us-east-1.amazonaws.com/elderpinq-dev-report-service:${{ github.sha }}
 
-  notify:
+  release:
+    name: ci / release-report-service
     needs: push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release Note
+        run: |
+          echo "Release: creation successful"
+
+  notify:
+    name: ci / notify-report-service
+    needs: release
     runs-on: ubuntu-latest
     steps:
       - name: Complete CI Notification

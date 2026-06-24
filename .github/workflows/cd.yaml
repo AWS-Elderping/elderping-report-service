@@ -8,6 +8,7 @@ on:
 
 jobs:
   prepare:
+    name: cd / prepare-report-service
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
@@ -17,6 +18,7 @@ jobs:
           echo "CD Pipeline triggered by CI Pipeline head sha: ${{ github.event.workflow_run.head_sha }}"
 
   deploy:
+    name: cd / deploy-report-service
     needs: prepare
     runs-on: ubuntu-latest
     steps:
@@ -71,6 +73,7 @@ jobs:
           fi
 
   notify:
+    name: cd / notify-report-service
     needs: deploy
     runs-on: ubuntu-latest
     steps:

@@ -84,7 +84,6 @@ jobs:
           echo "Failed to push changes to GitOps repo after 10 attempts."
           exit 1
 
-
   notify:
     name: cd / notify-report-service
     needs: deploy

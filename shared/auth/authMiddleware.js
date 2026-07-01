@@ -179,8 +179,7 @@ const checkRelationship = (elderIdParam = 'elderId') => {
           );
           linked = result.rows.length > 0;
         } else {
-          // Cross-service call to auth-service verification route
-          const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+          // Cross-service call to auth-service verification route (uses Node 18 native fetch)
           const response = await fetch(`${authServiceUrl}/links/verify/${userId}/${elderId}`);
           if (response.ok) {
             const data = await response.json();
@@ -197,9 +196,42 @@ const checkRelationship = (elderIdParam = 'elderId') => {
         console.error('Relationship validation error:', err.message);
         res.status(500).json({ error: 'Failed to verify relationship' });
       }
-    } else {
-      res.status(403).json({ error: 'Forbidden: Invalid role' });
+      return;
     }
+
+    // Doctor must verify a doctor_patient_links assignment
+    if (role === 'DOCTOR') {
+      try {
+        const authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:3000';
+        let linked = false;
+
+        if (process.env.DB_NAME === 'users_db' && pool) {
+          const result = await pool.query(
+            'SELECT 1 FROM doctor_patient_links WHERE doctor_id = $1 AND elder_id = $2',
+            [userId, elderId]
+          );
+          linked = result.rows.length > 0;
+        } else {
+          const response = await fetch(`${authServiceUrl}/doctor-links/verify/${userId}/${elderId}`);
+          if (response.ok) {
+            const data = await response.json();
+            linked = data.linked;
+          }
+        }
+
+        if (linked) {
+          next();
+        } else {
+          res.status(403).json({ error: 'Forbidden: You are not assigned to this patient' });
+        }
+      } catch (err) {
+        console.error('Relationship validation error:', err.message);
+        res.status(500).json({ error: 'Failed to verify relationship' });
+      }
+      return;
+    }
+
+    res.status(403).json({ error: 'Forbidden: Invalid role' });
   };
 };
 

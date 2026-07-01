@@ -68,48 +68,42 @@ const logAuditEvent = (arg1, arg2) => {
   }
 
   // Non-blocking fire-and-forget background call
-  import('node-fetch')
-    .then(({ default: fetch }) => {
-      const sendWithRetry = async (retriesLeft = 1) => {
-        const auditServiceUrl = process.env.AUDIT_SERVICE_URL || 'http://audit-service:3000';
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2-second timeout
+  const sendWithRetry = async (retriesLeft = 1) => {
+    const auditServiceUrl = process.env.AUDIT_SERVICE_URL || 'http://audit-service:3000';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2-second timeout
 
-        try {
-          const res = await fetch(`${auditServiceUrl}/audit`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(authHeader ? { 'Authorization': authHeader } : {})
-            },
-            body: JSON.stringify(payload),
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-          if (!res.ok) {
-            if (retriesLeft > 0) {
-              console.warn(`[AUDIT HOOK WARNING] HTTP ${res.status} from audit service. Retrying...`);
-              return sendWithRetry(retriesLeft - 1);
-            } else {
-              console.warn(`[AUDIT HOOK WARNING] Audit logging failed with HTTP status ${res.status} after retries.`);
-            }
-          }
-        } catch (err) {
-          clearTimeout(timeoutId);
-          if (retriesLeft > 0) {
-            console.warn(`[AUDIT HOOK WARNING] Error sending audit: ${err.message}. Retrying...`);
-            return sendWithRetry(retriesLeft - 1);
-          } else {
-            console.warn(`[AUDIT HOOK WARNING] Final failure sending audit log: ${err.message}`);
-          }
+    try {
+      const res = await fetch(`${auditServiceUrl}/audit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader ? { 'Authorization': authHeader } : {})
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        if (retriesLeft > 0) {
+          console.warn(`[AUDIT HOOK WARNING] HTTP ${res.status} from audit service. Retrying...`);
+          return sendWithRetry(retriesLeft - 1);
+        } else {
+          console.warn(`[AUDIT HOOK WARNING] Audit logging failed with HTTP status ${res.status} after retries.`);
         }
-      };
+      }
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (retriesLeft > 0) {
+        console.warn(`[AUDIT HOOK WARNING] Error sending audit: ${err.message}. Retrying...`);
+        return sendWithRetry(retriesLeft - 1);
+      } else {
+        console.warn(`[AUDIT HOOK WARNING] Final failure sending audit log: ${err.message}`);
+      }
+    }
+  };
 
-      sendWithRetry();
-    })
-    .catch((err) => {
-      console.warn(`[AUDIT HOOK WARNING] Failed to import node-fetch: ${err.message}`);
-    });
+  sendWithRetry();
 };
 
 module.exports = {

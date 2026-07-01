@@ -43,7 +43,6 @@ app.use((req, _res, next) => {
 // Helper to fetch microservices telemetry
 async function fetchServiceData(url, token) {
   try {
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     const response = await fetch(url, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -85,7 +84,6 @@ const verifyReportOwnership = async (req, res, next) => {
     // Caregiver relationship check
     if (role === 'CAREGIVER' || role === 'FAMILY') {
       const authServiceUrl = process.env.AUTH_SERVICE_URL || 'http://auth-service:3000';
-      const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
       const response = await fetch(`${authServiceUrl}/links/verify/${userId}/${report.elder_id}`);
       if (response.ok) {
         const data = await response.json();
@@ -157,7 +155,6 @@ async function processReportJob(reportId, elderId, token) {
     // Generate AI Insights via Bedrock
     let aiInsights = 'No metrics recorded. Maintain general caregiver oversight.';
     try {
-      const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
       const aiResponse = await fetch(aiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
@@ -213,7 +210,6 @@ async function processReportJob(reportId, elderId, token) {
 
     // Call notification-service to trigger email automatically
     const notifServiceUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3000';
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     fetch(`${notifServiceUrl}/notifications/trigger`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
